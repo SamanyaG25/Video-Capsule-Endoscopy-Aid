@@ -1,0 +1,246 @@
+import pandas as pd
+import os
+import numpy as np
+from sklearn.model_selection import train_test_split
+import keras
+import csv
+import math
+from PIL import Image #Python imaging library
+import keras.backend as K
+from keras.applications.vgg16 import VGG16
+from keras.preprocessing import image
+from keras.applications.vgg16 import preprocess_input
+from keras.layers import Input, Flatten, Dense, Dropout
+from keras.models import Model, Sequential
+#from keras.layers.normalization import BatchNormalization 
+from keras.layers.normalization.batch_normalization import BatchNormalization
+from keras import regularizers
+from keras.optimizers import SGD
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import r2_score
+from sklearn.metrics import accuracy_score
+import keras.backend as K
+#from keras.preprocessing.image import load_img
+from keras_preprocessing.image import load_img
+#from keras.preprocessing.image import img_to_array
+from keras_preprocessing.image import img_to_array
+from keras.utils import load_img, img_to_array
+#No Version - 32 or 57
+#Version2 - 114
+#Version3 - 114-57
+import cv2
+
+#imports libraries
+
+import keras
+import tensorflow as tf
+import tensorflow.compat.v2
+print (keras.__version__)
+import tensorflow as tf
+tf.__version__
+
+#import tensorflow as tf
+
+SIZE = 224
+NUM_CHANNELS = 3
+numSamples = 228
+def resize_and_save(fullPath, output_dir, size=SIZE):
+    """Resize the image contained in `filename` and save it to the `output_dir`"""
+    image = load_img(fullPath, target_size=(224, 224))
+    dirName, fileName = os.path.split(fullPath)
+    resEmpty = np.empty((SIZE, SIZE, NUM_CHANNELS), dtype=np.uint8)
+    resEmpty[:,:] = image
+    resultImage = Image.fromarray(resEmpty)
+    resultImage.save(os.path.join(output_dir, fullPath.split('/')[-1]))
+#creates the resizing function and reads the csv file
+
+df = pd.read_csv('/Users/sg2025/Documents/Normal_Abnormal114.csv')
+
+for fullPath in df['Name']:
+    dirName, fileName = os.path.split(fullPath)
+    print(dirName)
+    print(fileName)
+    resize_and_save(fullPath, dirName+'/224')
+XImageList = []
+YList = []
+#resizes and safes the image into a new file
+
+for imageCount in range(int(numSamples/2)):
+    Infected224 = Image.open('/Users/sg2025/Documents/IntestinalDataset/Train/Abnormal/224/Abnormal'+str(imageCount+1)+'.jpg')
+    XImageList.append(np.array(Infected224)) #creates an array and appends input into it
+for imageCount in range(int(numSamples/2)):
+    Normal224 = Image.open('/Users/sg2025/Documents/IntestinalDataset/Train/Normal/224/Normal'+str(imageCount+1)+'.jpg')
+    XImageList.append(np.array(Normal224)) #creates an array and appends input into it
+print("Exit from reading the names of files")
+YList=df["Label"]
+print(XImageList)
+#YList=[1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0]
+#opens and reads the names of the files
+
+x_array = np.asarray(XImageList) #Makes the input into an array
+y_array = np.asarray(YList) #Makes the input into an array
+print (x_array.shape) #prints the attributes of the array (140, 224, 224, 3)
+#print (x_array)
+x_train, x_test, y_train, y_test = train_test_split(x_array, y_array) #splits data arrays into two subsets: for training data and for testing data
+
+numClasses = np.unique(y_train).size #finds the unique values from the arrays
+y_train = keras.utils.to_categorical(y_train, numClasses) #Converts a class vector (integers) to binary class matrix.
+y_test = keras.utils.to_categorical(y_test, numClasses) #Converts a class vector (integers) to binary class matrix.
+print(y_train)
+#Reads the files and their labels to put them in an array based on the number of classes
+
+# Create your own input format ( for our use case 224x224x3)
+keras_input = Input(shape=(SIZE,SIZE,NUM_CHANNELS), name='image_input')
+model_vgg16_conv = VGG16(weights='imagenet', include_top=False)
+for layer in model_vgg16_conv.layers:
+    layer.trainable = False
+# Use the generated model
+output_vgg16_conv = model_vgg16_conv(keras_input)
+
+#Create a new 'top' of the model (which is the fully connected layer) 
+#This is 'bootstraping' a new model onto the pretrained layer 
+
+#Dense layer expects a single column vector 
+x = Flatten(name='flatten')(output_vgg16_conv)
+x = Dense(512, activation='relu', name='fc1')(x)#fully connected layer
+x = Dropout(0.4)(x) #Drops out certain features to train the model to predict more unclear images (prevents overfitting)
+x = Dense(2, activation='softmax', name='predictions')(x)
+
+#Group the pretrained model and the fully-connected layers in the model object
+pretrained_model = Model(keras_input, x)
+
+#Compile the model for training 
+pretrained_model.compile(optimizer='Adam',loss='binary_crossentropy',metrics=['accuracy']) 
+hist = pretrained_model.fit(x_train, y_train, epochs=15, batch_size=10, validation_data=(x_test, y_test))
+pretrained_model.save("/Users/sg2025/Documents/IntestinalDataset5_v2.h5")
+#Trains the model, tests itself, and then saves the model 
+
+from keras.models import load_model #5
+pretrained_model = load_model('/Users/sg2025/Documents/IntestinalDataset5_v2.h5')
+
+global videoName
+global folderName 
+videoName = 'TestVideo2.mp4'#'TestVideo3.mp4'
+folderName = 'TestVideo2_Folder'
+vid = cv2.VideoCapture('/Users/sg2025/Documents/OpenCV2/' + videoName)
+fps = vid.get(cv2.CAP_PROP_FPS)
+#print("The frames per second is " + str(fps))
+currentFrame = 0
+global num_frames
+num_frames = 0
+
+if not os.path.exists(folderName):
+    os.makedirs(folderName)
+while (True):
+    success, frame = vid.read()
+    print(num_frames)
+    num_frames = num_frames+1
+    
+    cv2.imshow("Output", frame)
+    cv2.imwrite('./' + folderName + '/frame' + str(currentFrame) + '.jpg', frame)
+    currentFrame +=1
+    
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+
+        
+vid.release()
+cv2.destroyAllWindows()
+
+import tkinter as tk
+from tkinter import filedialog
+from keras.preprocessing import image
+from PIL import ImageTk, Image
+
+from email.message import EmailMessage
+import ssl
+import smtplib
+import datetime
+import time
+
+
+def classify():
+    i=0
+    global imageList
+    imageList = []
+    global diagnosisList 
+    global abnormalCounter
+    global normalCounter
+    abnormalCounter = 0
+    normalCounter = 0
+    diagnosisList = []
+    while (i<num_frames-1):
+        img_path = "/Users/sg2025/" + folderName + "/frame" + str(i)+".jpg"
+        img = load_img(img_path, target_size=(224, 224))
+        display(img)
+        img = load_img(img_path, target_size=(224, 224))
+        #x = image.image_to_array(img)
+        #x = tf.keras.utils.image.img_to_array(img)
+        x = np.array(img)
+        x = np.expand_dims(x, axis=0)
+        x = preprocess_input(x)
+        output = pretrained_model.predict(x)
+        print(output)
+        if (output[0][0] > 0.50):
+            print("Abnormal Intestinal Lining")
+            abnormalCounter=abnormalCounter+1
+            diagnosisList.append("Abnormal Intestinal Lining")
+            imageList.append(i)
+        if (output[0][0] < 0.50):
+            print("Normal Intestinal Lining")
+            normalCounter = normalCounter+1
+            diagnosisList.append("Normal Intestinal Lining")
+            imageList.append(i)
+        i=i+math.floor(fps)
+
+
+def reportResults():
+    email_sender = 'resultemailreceiver@gmail.com'
+    email_password = 'izbq cmha lecu ujax'
+    email_receiver = 'resultemailreceiver@gmail.com'
+
+    abnormal_percent = (abnormalCounter/len(diagnosisList))*100
+    normal_percent = (normalCounter/len(diagnosisList))*100
+
+    i = 0
+    abnormal_timestamp = ""
+    while (i<len(diagnosisList)):
+        if (abnormalCounter == 0):
+            abnormal_timestamp = "No timestamps for abnormal images"
+            break
+        elif (diagnosisList[i] == 'Abnormal Intestinal Lining'):
+            timestamp = imageList[i]/math.floor(fps)
+            result = datetime.timedelta(seconds = timestamp)
+            abnormal_timestamp = abnormal_timestamp + str(result) + ", "
+
+        if (i == len(diagnosisList)-1):
+            abnormal_timestamp = "Abnormalities found in these timestamps: " + "[" + abnormal_timestamp + "]"
+
+        i=i+1
+
+
+    subject = 'VCE Results From ' + videoName
+    body = """
+    Here are the results for the Video Capsule Endoscopy from video: """ + videoName + """
+
+    Percent of Abnormal Images = """ + str(abnormal_percent) + """ 
+    Percent of Normal Images = """ + str(normal_percent) + """
+
+     """ + abnormal_timestamp
+
+    em = EmailMessage()
+    em['From'] = email_sender
+    em['To'] = email_receiver
+    em['Subject'] = subject
+    em.set_content(body)
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as smtp:
+        smtp.login(email_sender, email_password)
+        smtp.sendmail(email_sender, email_receiver, em.as_string())
+        print("Report has been emailed")
+
+classify()
+reportResults()
